@@ -366,4 +366,4 @@ obligations for the sources are listed in the annotation package's
 ## Contact
 
 **Qingbo Kang**  
-Email: qingbokang@scu.edu.cn
+Email: kangqingbokb@gmail.com

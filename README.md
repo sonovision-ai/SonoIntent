@@ -158,8 +158,8 @@ pytest tests/
 ```
 
 Python 3.10 or later is required, with NumPy and Pillow. The suite contains
-37 tests; two count checks skip unless `SONOINTENT_ANNOTATIONS` points to an
-annotation package, so 35 pass by default.
+44 tests; two count checks skip unless `SONOINTENT_ANNOTATIONS` points to an
+annotation package, so 42 pass by default.
 
 ## Building the benchmark
 

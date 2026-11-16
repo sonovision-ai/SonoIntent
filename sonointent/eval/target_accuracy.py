@@ -223,3 +223,28 @@ def classify(text, canon_slug):
                 rule=rule, alias=alias)
 
 
+_SPECIAL_TOKEN = re.compile(r"\[[A-Z_]+\]|</?s>|<pad>|<unk>|<image>")
+
+
+def has_usable_text(text):
+    """True when the generated response contains at least one alphanumeric
+    character after special tokens are removed. Empty, whitespace-only,
+    punctuation-only and `[SEG]`-only outputs carry no verifiable statement."""
+    if not isinstance(text, str):
+        return False
+    return any(ch.isalnum() for ch in _SPECIAL_TOKEN.sub("", text))
+
+
+def label_for_text(text, canon_slug):
+    """Final row label for a generated response.
+
+    An empty or unusable response is `C_unverifiable` and is excluded from
+    TargetAcc / TA-Dice. A usable response that names no known target is
+    `A_unstated`, which remains in the denominator with zero credit.
+    """
+    if not has_usable_text(text):
+        return "C_unverifiable"
+    label = classify(text, canon_slug)["label"]
+    return "A_unstated" if label == "unresolved" else label
+
+

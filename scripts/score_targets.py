@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sonointent.eval.target_accuracy import ZH_SLUG, classify, target_of
+from sonointent.eval.target_accuracy import ZH_SLUG, label_for_text, target_of
 from sonointent.eval.target_metrics import aggregate, write_tsv
 
 SETTING = {"ID": "ID", "OOD_dataset": "Dataset-OOD",
@@ -51,12 +51,12 @@ def main(argv=None):
     for s in split:
         p = preds[s["sample_id"]]
         canon = target_of(s)
-        label = classify(p.get("generated_text") or "",
-                         ZH_SLUG.get(canon, canon))["label"]
+        label = label_for_text(p.get("generated_text"),
+                               ZH_SLUG.get(canon, canon))
         rows.append({
             "model": a.model,
             "setting": SETTING[s["ood_type"]],
-            "label_final": "A_unstated" if label == "unresolved" else label,
+            "label_final": label,
             "dice": float(p.get("dice") or 0.0),
         })
 

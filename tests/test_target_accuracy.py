@@ -1,6 +1,6 @@
 import pytest
 
-from sonointent.eval.target_accuracy import classify, target_of
+from sonointent.eval.target_accuracy import classify, label_for_text, target_of
 
 
 def test_delineate_object_wins():
@@ -39,3 +39,20 @@ def test_target_of_falls_back_to_dataset():
     row = {"rendered_mask": "rendered/CAMUS/CAMUS__p01__frame.png",
            "dataset": "CAMUS"}
     assert target_of(row) == "左心室腔"
+
+
+@pytest.mark.parametrize("text", [None, "", "   \n\t", "...", " [SEG] "])
+def test_empty_or_unusable_text_is_unverifiable(text):
+    assert label_for_text(text, "breast_lesion") == "C_unverifiable"
+
+
+def test_unresolved_but_usable_text_is_unstated():
+    assert label_for_text("The image shows a hypoechoic region.",
+                          "left_atrium") == "A_unstated"
+
+
+def test_label_for_text_keeps_correct_and_incorrect():
+    assert label_for_text("Therefore, delineate the lesion itself.",
+                          "breast_lesion") == "correct"
+    assert label_for_text("Therefore, delineate the lesion itself.",
+                          "examined_muscle") == "incorrect"

@@ -1,42 +1,38 @@
 # SonoIntent
 
-**The SonoIntent benchmark for clinical objective-driven ultrasound
-segmentation**
+SonoIntent is a benchmark for clinical objective-driven ultrasound
+segmentation. It contains **130,928 image–question samples** from **83,324
+ultrasound images** across **30 datasets**, covering **23 clinical scenarios**
+and **12 anatomical regions**. Every sample pairs an ultrasound image with a
+clinical question and a structured reference reasoning that resolves the
+question to the target to be segmented; the target mask is the prediction
+target. Models are evaluated in one in-distribution (ID) setting and three
+out-of-distribution (OOD) settings.
 
-SonoIntent is a benchmark of **130,928 image–question samples** derived from
-**83,324 ultrasound images** across **30 datasets**, covering **23 clinical
-scenarios** and **12 anatomical regions**. Every sample pairs an ultrasound
-image with a clinical question and a structured reference reasoning that
-explains which target to segment and why; the target mask is the prediction
-target. The benchmark evaluates segmentation models under an in-distribution
-(ID) setting and three out-of-distribution (OOD) settings.
+![Figure 1. Overview of the SonoIntent benchmark](assets/figure1.png)
 
-![Overview](assets/overview_fig1_page.png)
+**[Figure 1. Overview of the SonoIntent benchmark.](assets/figure1.pdf)**
 
-*Figure 1 from the paper (rendered from the manuscript PDF): the SonoIntent
-sample pipeline and the four evaluation settings.*
+## Task
 
-## Clinical motivation
+Ultrasound requests in clinical practice often state a **clinical objective**
+— measure ejection fraction, assess a nodule, plan a procedure — rather than
+naming the structure to segment. A model must then resolve the objective to
+the correct anatomical target before segmenting it. Most existing benchmarks
+assume the target is named explicitly; SonoIntent makes objective-to-target
+resolution part of the task. Each sample consists of
 
-Ultrasound segmentation requests in clinical practice often specify a
-**clinical objective** — measure ejection fraction, assess a nodule, plan a
-procedure — rather than naming the target structure. A useful assistant must
-first resolve the objective to the correct anatomical target and then segment
-it. Existing benchmarks mostly assume the target is named explicitly.
-SonoIntent makes objective-to-target resolution part of the task: each sample
-consists of
-
-1. a clinical question (e.g., *"Please delineate the region required for
-   calculating the ejection fraction."*),
+1. a clinical question, e.g. *"Please delineate the region required for
+   calculating the ejection fraction."*;
 2. a structured reference reasoning that combines clinician-defined
    objective-to-target mappings and boundary rules with case-specific image
-   evidence, and
+   evidence;
 3. a binary segmentation mask of the intended target.
 
 A model that segments the right structure for the wrong objective receives no
-credit under the benchmark's target-aware metrics.
+credit under the target-aware metrics.
 
-## Benchmark composition
+## Composition
 
 | | count |
 |---|---:|
@@ -48,57 +44,61 @@ credit under the benchmark's target-aware metrics.
 | train / val / test | 102,248 / 5,810 / 22,870 |
 | target-absent samples (independent test set) | 656 |
 
-The 30 sources span superficial and vascular (11,503 test samples), cardiac
+The sources span superficial and vascular (11,503 test samples), cardiac
 (4,076), musculoskeletal (3,917), abdominal and pelvic (2,336), and obstetric
-(1,038) imaging. The clinical questions cover abnormality assessment,
-quantitative measurement, morphological assessment, functional assessment,
-procedure planning, and anatomical reference identification; the full
-scenario inventory is Supplementary Table 1 of the paper.
+(1,038) imaging. The questions cover abnormality assessment, quantitative
+measurement, morphological assessment, functional assessment, procedure
+planning, and anatomical reference identification; Supplementary Table 1 of
+the paper lists all 23 scenarios.
 
-## Four evaluation settings
+## Evaluation settings
 
-The 22,870-sample test set is organized into one ID setting and three OOD
-settings (test-set share in parentheses):
+The 22,870-sample test set comprises one ID setting and three OOD settings.
+Shares refer to the test set.
 
-| setting | samples | share | composition | `ood_type` field value |
+| setting | samples | share | composition | `ood_type` |
 |---|---:|---:|---|---|
 | ID | 5,385 | 23.55% | held-in datasets, unseen images | `ID` |
 | Dataset-OOD | 3,829 | 16.74% | 5 held-out sources (MUP+MicroSegNet, BUS-UC, DDTI, Fast-U-Net, MMOTU-3D) | `OOD_dataset` |
 | Anatomy-OOD | 3,917 | 17.13% | a held-out anatomy (muscle) | `OOD_organ` |
 | Objective-OOD | 9,739 | 42.58% | clinical objectives unseen during training | `OOD_intent` |
 
-Target-absent samples form a separate 656-sample test set (breast and liver
-questions with empty masks) with `ood_type` `target_absent`.
+Target-absent samples form a separate 656-sample test set of breast and liver
+questions with empty masks; their `ood_type` is `target_absent`.
+Machine-readable subset definitions are in
+[`configs/eval_subsets.yaml`](configs/eval_subsets.yaml).
 
 ## Metrics
 
 The paper reports **target identification accuracy (TargetAcc)**, **Dice**,
-and **target-aware Dice (TA-Dice)** (mask overlap credited only when the
-generated response states the correct target). Reported findings include a
-maximum Dice of 89.70% in ID versus 18.84% under Objective-OOD across the 26
-evaluated model configurations, and Sa2VA-14B reaching 99.99% TargetAcc with
-10.95% Dice under Objective-OOD. On the 656 target-absent cases, 25 of 26
-configurations achieved valid empty-mask accuracy of at most 3.51%.
+and **target-aware Dice (TA-Dice)**, which credits mask overlap only when the
+generated response states the correct target. Across the 26 model
+configurations evaluated, the maximum Dice is 89.70% in ID and 18.84% under
+Objective-OOD; Sa2VA-14B reaches 99.99% TargetAcc with 10.95% Dice under
+Objective-OOD. On the 656 target-absent cases, 25 of the 26 configurations
+achieve empty-mask accuracy of at most 3.51%.
 
-This repository provides the mask-level metrics and an aggregation script:
-Dice, IoU, precision, recall (`sonointent.eval.metrics`), and per-setting
-aggregation with gIoU/cIoU (`sonointent.eval.evaluate`). Following the
-paper's evaluation pipeline, **gIoU is the mean of per-sample pixel IoU**
-and **cIoU is total pixel intersection over total pixel union**; Dice is the
-mean of per-sample Dice. TargetAcc / TA-Dice depend on the model's generated
-text and are reported in the paper's evaluation pipeline (not yet included
-here).
+This repository implements the mask-level metrics: Dice, IoU, precision and
+recall per sample (`sonointent.eval.metrics`), and per-setting aggregation
+with gIoU and cIoU (`sonointent.eval.evaluate`). gIoU is the mean of
+per-sample pixel IoU, cIoU is total pixel intersection over total pixel union,
+and Dice is the mean of per-sample Dice. TargetAcc and TA-Dice require the
+generated response text and are not computed here.
 
-## Dataset access
+## Data access
 
-The SonoIntent annotation package (public `public_id`-keyed annotations,
-portable index, per-source license register) is **not yet deployed** to a
-public repository; this repository ships no annotations, images or masks.
+SonoIntent is built from 30 existing ultrasound datasets. This repository
+contains no images, masks or annotations.
 
-The 30 source datasets remain under their own licenses. Access them through
-the official channels; the per-source register (license status, official URL,
-DOI, access restrictions) ships with the annotation package. Examples of
-official links verified for this README:
+The SonoIntent annotation package contains the `public_id`-keyed questions
+and reference reasoning, split and setting labels, image and mask SHA-256
+values, and a per-source license register. It is being prepared for public
+release and is not yet available. It contains no pixel data. Loaders for the
+package are provided in `sonointent.data.annotations` and
+`sonointent.data.manifest`.
+
+The source datasets remain under their own licenses and are available
+through their official channels:
 
 | source | official entry point |
 |---|---|
@@ -110,116 +110,115 @@ official links verified for this README:
 | BUSI (breast) | <https://doi.org/10.1016/j.dib.2019.104863> |
 | DDTI (thyroid) | <https://doi.org/10.1117/12.2073532> |
 
-Several sources carry non-commercial / share-alike / registration conditions,
-and some have no verifiable data-level license; researchers must check the
-source terms before use or redistribution. A Hugging Face gate, if ever used,
-is access control — not a redistribution authorization.
+Several sources are non-commercial, share-alike or registration-only, and
+some have no verifiable data-level license; check the source terms before use
+or redistribution. Access control on a hosting platform does not by itself
+permit redistribution. Release tiers are described in
+[`docs/DATA_GOVERNANCE.md`](docs/DATA_GOVERNANCE.md) and component licenses in
+[`docs/LICENSE_MATRIX.md`](docs/LICENSE_MATRIX.md).
 
 ## Installation
 
 ```bash
-pip install -e ".[test]"        # library + test dependencies
-pytest tests/                    # 20 unit tests
+pip install -e ".[test]"   # library, CLI and pytest
+pytest tests/
 ```
 
-Requires Python ≥ 3.10, `numpy`, and (for the evaluator) `Pillow`.
+Python 3.10 or later is required, with NumPy and Pillow. The suite contains
+27 tests; two count checks skip unless `SONOINTENT_ANNOTATIONS` points to an
+annotation package, so 25 pass by default.
 
-## Data preparation
+## Evaluation
 
-Two evaluation input modes are supported; both expect masks as 8-bit PNGs
-(0/255), 0/1 images, or boolean arrays:
+The evaluator accepts masks as 8-bit PNGs (0/255), 0/1 images, or boolean
+arrays.
 
-**Pairs mode** (self-contained; runs without the dataset package):
+### Paired predictions
+
+Pairs mode is self-contained and does not require the annotation package.
+Each JSONL line names a prediction, its reference mask, and the split:
 
 ```jsonl
 {"public_id": "si_…", "split": "test", "ood_type": "ID", "pred_mask": "preds/si_….png", "gt_mask": "gts/si_….png"}
 ```
 
-**Package mode** (uses the annotation package for setting labels; the full
-expected public_id set of the requested split is the benchmark — missing,
-duplicate or unknown predictions mark the run incomplete):
+```bash
+sonointent-eval --pairs pairs.jsonl --out metrics.json
+```
+
+### Benchmark package
+
+Package mode reads setting labels from the annotation package and expects
+reference masks at `gts/<public_id>.png`:
 
 ```bash
 sonointent-eval --annotations SonoIntent-Annotations \
   --predictions preds.jsonl --gt-root gts/
 ```
 
-`preds.jsonl` lines: `{"public_id": "si_…", "pred_mask": "preds/si_….png"}`
-(the values are JSON strings, one object per line). Reference masks live at
-`gts/<public_id>.png`. Restrict the benchmark to one subset with
-`--split target_absent` or `--split test --ood-type OOD_intent`.
+`preds.jsonl` contains one object per line:
+`{"public_id": "si_…", "pred_mask": "preds/si_….png"}`.
 
-The evaluator follows the paper's failure accounting: a missing or unreadable
-prediction marks the run incomplete (exit code 2) and writes no metrics — a
-partial submission never produces full-benchmark numbers and a failed sample
-is never silently scored as zero.
+The full expected `public_id` set of the requested split defines the
+benchmark. Missing, duplicate, unknown or unreadable predictions make the run
+incomplete: the evaluator exits with code 2 and writes no metrics, so a
+partial submission cannot produce full-benchmark numbers. Restrict the
+benchmark to one subset with `--split target_absent` or
+`--split test --ood-type OOD_intent`.
 
-## Evaluation and metrics (library)
+### Python API
 
 ```python
 import numpy as np
 from sonointent.eval.metrics import score
-from sonointent.eval.settings import SETTINGS      # ("ID", "OOD_dataset", "OOD_organ", "OOD_intent")
 
 pred = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float32)   # model output
-gt   = np.array([[0, 255], [255, 0]], dtype=np.uint8)          # SonoIntent mask
+gt   = np.array([[0, 255], [255, 0]], dtype=np.uint8)          # reference mask
 dice, iou, precision, recall, inter, union = score(pred, gt)   # 1.0, 1.0, …
 ```
 
 Binarization follows the official post-processing: float arrays in [0, 1] are
-thresholded at `> 0`, stored 0/255 masks at `> 127`, boolean arrays as-is.
-Empty handling matches the official definition without special cases: an
-empty prediction against a non-empty target scores 0.
+thresholded at `> 0`, stored 0/255 masks at `> 127`, and boolean arrays are
+used as-is. Empty masks need no special case: an empty prediction against a
+non-empty target scores 0, and two empty masks also score 0. Target-absent
+samples are therefore assessed by empty-mask accuracy rather than Dice.
 
-## Reproducibility scope
+## Scope
 
-**Included and runnable here:** mask metrics with the official definitions,
-per-setting aggregation, loading and count verification for the public
-annotation package (`sonointent.data.annotations`,
-`sonointent.data.manifest`), and unit tests covering all of the above.
-
-**Not included (internal or not yet published):** the render/build pipeline
-that produced the 83,324 frames and masks from the 30 sources (frame
-extraction rules, CAMUS intermediate-frame propagation, ACOUSLIC
-interpolation), the reasoning-template engine, the training recipes for the
-26 model configurations, and the end-to-end model evaluation harness with
-TargetAcc / TA-Dice. This repository therefore verifies and scores against a
-**frozen benchmark**; it does not rebuild the benchmark from raw sources.
+This repository provides the annotation loaders, mask metrics and evaluation
+CLI. The benchmark construction pipeline, training code and model checkpoints
+are not included.
 
 ## Citation
 
 ```bibtex
 @misc{sonointent,
-  title  = {The SonoIntent benchmark for clinical objective-driven
-            ultrasound segmentation},
-  author = {Qingbo Kang and Yajun Mu and Wen Wen and Yong Chen and Yiyue Li
-            and Jun Gao and Huahui Yi and Ting Wen and Yuxi Cheng and
-            Zekun Jiang and Kun Wang and Yushuang He and Wenwu Ling and
-            Kang Li},
-  year   = {TODO: publication year},
-  note   = {Citation details will be updated upon publication.}
+  title        = {The SonoIntent benchmark for clinical objective-driven
+                  ultrasound segmentation},
+  author       = {Qingbo Kang and Yajun Mu and Wen Wen and Yong Chen and Yiyue Li
+                  and Jun Gao and Huahui Yi and Ting Wen and Yuxi Cheng and
+                  Zekun Jiang and Kun Wang and Yushuang He and Wenwu Ling and
+                  Kang Li},
+  howpublished = {\url{https://github.com/sonovision-ai/SonoIntent}},
+  note         = {Citation details will be updated upon publication.}
 }
 ```
 
-Until publication, please also cite this repository and the 30 source
-datasets listed in the dataset package's source register.
+Until the paper appears, please also cite this repository and the source
+datasets listed in the annotation package's source register.
 
-## License and third-party acknowledgments
+## License
 
-- **Code license:** pending project-lead approval. Apache-2.0
-  (<https://www.apache.org/licenses/LICENSE-2.0>) is the current proposal;
-  no `LICENSE` file is shipped until the license is approved.
-- **SonoIntent-authored texts** (questions, reference reasoning): a CC BY 4.0
-  release is proposed (<https://creativecommons.org/licenses/by/4.0/>),
-  pending legal confirmation.
-- **Third-party data:** the 30 source datasets, their masks and derived
-  frames remain under each source's own terms. SonoIntent does not relicense
-  them. Attribution obligations known today are listed in the dataset
-  package's `NOTICE.md` and per-source register; users must check each source
-  before redistribution.
+The code in this repository is released under the Apache License 2.0; see
+[`LICENSE`](LICENSE). SonoIntent-authored questions and reference reasoning
+are intended for release under CC BY 4.0 with the annotation package. The 30
+source datasets, their masks and derived frames remain under each source's
+own terms; this repository does not relicense them. See
+[`docs/LICENSE_MATRIX.md`](docs/LICENSE_MATRIX.md) for details; attribution
+obligations for the sources are listed in the annotation package's
+`NOTICE.md`.
 
 ## Contact
 
-Corresponding authors (from the paper): Yushuang He
-(heyushuang0928@scu.edu.cn), Wenwu Ling (lingwenwubing@163.com), Kang Li
-(likang@wchscu.cn).
+Corresponding authors: Yushuang He (heyushuang0928@scu.edu.cn), Wenwu Ling
+(lingwenwubing@163.com), Kang Li (likang@wchscu.cn).

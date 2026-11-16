@@ -1,0 +1,47 @@
+# python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# data & artifacts (never commit; root-level only)
+/data/
+/annotations/
+/rendered*/
+*.jsonl
+*.csv
+*.tsv
+*.parquet
+*.nii
+*.nii.gz
+*.mhd
+*.raw
+*.dcm
+*.png
+*.PNG
+*.jpg
+*.JPG
+*.jpeg
+*.bmp
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.safetensors
+*.zip
+*.tar
+*.gz
+!assets/*.png
+
+# secrets / local
+*.key
+.env
+.credentials
+# logs & temp
+*.log
+*.tmp

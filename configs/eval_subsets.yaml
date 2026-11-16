@@ -1,0 +1,8 @@
+# Subsets used by sonointent.eval.evaluate.
+# Paper names <-> ood_type field values in the annotation package.
+subsets:
+  ID: {ood_type: ID}
+  Dataset-OOD: {ood_type: OOD_dataset}
+  Anatomy-OOD: {ood_type: OOD_organ}
+  Objective-OOD: {ood_type: OOD_intent}
+  target_absent: {split: target_absent}

@@ -365,5 +365,5 @@ obligations for the sources are listed in the annotation package's
 
 ## Contact
 
-Corresponding authors: Yushuang He (heyushuang0928@scu.edu.cn), Wenwu Ling
-(lingwenwubing@163.com), Kang Li (likang@wchscu.cn).
+**Qingbo Kang**  
+Email: qingbokang@scu.edu.cn

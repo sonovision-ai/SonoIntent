@@ -78,12 +78,44 @@ Objective-OOD; Sa2VA-14B reaches 99.99% TargetAcc with 10.95% Dice under
 Objective-OOD. On the 656 target-absent cases, 25 of the 26 configurations
 achieve empty-mask accuracy of at most 3.51%.
 
-This repository implements the mask-level metrics: Dice, IoU, precision and
-recall per sample (`sonointent.eval.metrics`), and per-setting aggregation
-with gIoU and cIoU (`sonointent.eval.evaluate`). gIoU is the mean of
-per-sample pixel IoU, cIoU is total pixel intersection over total pixel union,
-and Dice is the mean of per-sample Dice. TargetAcc and TA-Dice require the
-generated response text and are not computed here.
+For a setting with `n_evaluable` scorable samples:
+
+```text
+TargetAcc = n_correct / n_evaluable
+TA-Dice   = sum(dice * 1[correct]) / n_evaluable
+Dice      = mean of per-sample Dice
+gIoU      = mean of per-sample pixel IoU
+cIoU      = sum(pixel intersection) / sum(pixel union)
+```
+
+Each response is assigned one of four labels. `correct` and `incorrect` are
+scorable and stay in the denominator. `A_unstated` means the response does not
+name a known target; it stays in the denominator with zero contribution.
+`C_unverifiable` means the response carries no usable generated text and is
+excluded from both numerator and denominator. Target identification is
+deterministic: the target is the object of the last `delineate ...` clause
+(with the `, excluding ...` tail removed), matched against anchored,
+most-specific-first aliases. No model or judge is used.
+
+This repository implements the per-sample mask metrics (`Dice`, `IoU`,
+`precision`, `recall`), the aggregate metrics above, and target scoring from
+generated text. See [`sonointent/eval/metrics.py`](sonointent/eval/metrics.py),
+[`sonointent/eval/evaluate.py`](sonointent/eval/evaluate.py),
+[`sonointent/eval/target_accuracy.py`](sonointent/eval/target_accuracy.py) and
+[`sonointent/eval/target_metrics.py`](sonointent/eval/target_metrics.py).
+
+## Repository layout
+
+| path | contents |
+|---|---|
+| `sonointent/build/` | reference reasoning renderer, target profiles and image-evidence operators, official split construction |
+| `sonointent/data/` | loaders for the annotation package and its manifest |
+| `sonointent/eval/` | mask metrics, evaluator CLI, official evaluation harness and report, target scoring |
+| `examples/lisa_plus/` | reference training adapter for the LISA++ / ReasonSeg stack |
+| `scripts/` | split construction and target-scoring entry points |
+| `configs/` | evaluation subset definitions |
+| `docs/` | data governance and license notes |
+| `tests/` | unit tests for metrics, loaders, split logic and target matching |
 
 ## Data access
 
@@ -120,13 +152,90 @@ permit redistribution. Release tiers are described in
 ## Installation
 
 ```bash
-pip install -e ".[test]"   # library, CLI and pytest
+pip install -e ".[test]"        # library, evaluator CLI and pytest
+pip install -e ".[build]"       # adds SciPy for the image-evidence operators
 pytest tests/
 ```
 
 Python 3.10 or later is required, with NumPy and Pillow. The suite contains
-27 tests; two count checks skip unless `SONOINTENT_ANNOTATIONS` points to an
-annotation package, so 25 pass by default.
+37 tests; two count checks skip unless `SONOINTENT_ANNOTATIONS` points to an
+annotation package, so 35 pass by default.
+
+## Building the benchmark
+
+### Split
+
+The official split is rebuilt from the assembled V1 record file, whose rows
+carry `dataset`, `sample_id`, `rendered_image` and `rendered_mask`:
+
+```bash
+sonointent-build-split \
+  --input train_full_v1_rendered.jsonl \
+  --out-dir /path/to/final/split
+```
+
+This writes `train.jsonl`, `val.jsonl` and `test.jsonl`. Five sources are held
+out whole as Dataset-OOD; `TG3K`, `Segthy` and `CUBS` contribute
+Objective-OOD samples; `STMUS NDA` is the Anatomy-OOD source. The remaining
+datasets are split 90/5/5 by the highest available group level — patient,
+video, sweep, case or volume — with seed 42, so no subject crosses train, val
+and test. The command reports component counts, checks that the splits are
+disjoint and that no OOD sample entered train or val, and verifies that every
+referenced image and mask exists.
+
+### Reference reasoning
+
+`sonointent/build/v1_engine.py` implements the reasoning renderer. For a given
+target it walks a target-specific evidence profile, computes image evidence
+with the operators in `sonointent/build/v19_metrics.py`, falls back to frozen
+per-image evidence where a measurement is unavailable, and emits at most two
+evidence clauses followed by the fixed boundary definition. The target
+profiles are in `sonointent/build/v19_profiles.py` and the clinical task
+specifications in `sonointent/build/v20_specs.py`.
+
+The renderer reads the frozen V15 sample manifest and V17 evidence table from
+the source tree named by `SONOINTENT_SOURCE_ROOT`. These frozen intermediate
+artifacts and the driver that assembled the released records are not part of
+this repository; see [Scope](#scope).
+
+## Training and inference
+
+The released records use four fields: `rendered_image`, `rendered_mask`,
+`problem` (the clinical question) and `thinking` (the reference reasoning).
+The training target is the reasoning followed by the segmentation token:
+
+```text
+thinking + " Corresponding segmentation: [SEG]"
+```
+
+[`examples/lisa_plus/ours_reason_seg_dataset.py`](examples/lisa_plus/ours_reason_seg_dataset.py)
+is the adapter used for the LISA++ / ReasonSeg stack; it reads a split JSONL
+and resolves images and masks relative to the `final/` directory that contains
+`split/`. The other model families in the paper (Sa2VA, PixelLM, UGround,
+PSALM, VRS, GLaMM, HyperSeg, InstructSeg, OMG-LLaVA, MedFuse, LaSaña and
+Seg-Zero) were trained within their own upstream codebases using the same
+record fields; their training code is not duplicated here.
+
+Inference follows one protocol for every family: the model receives only the
+rendered image and the question, generates greedily with
+`max_new_tokens = 384`, and the emitted mask is thresholded at `pred > 0`.
+`sonointent/eval/harness.py` is the shared driver. Implement a callable that
+maps one split row to per-sample scores and generated text, then call:
+
+```python
+from sonointent.eval.harness import load_rows, run_test
+
+rows = load_rows("final/split/test.jsonl")
+run_test(out_dir, rows, infer_one, "Model-7B", "ckpt_best")
+```
+
+`infer_one(row)` receives the split row with `_image` and `_mask` absolute
+paths and returns `dice, iou, precision, recall, inter, union, seg_emitted,
+valid_mask` plus `generated_text`. The harness writes `predictions.jsonl`,
+`metrics.json` and `paper_results.md`, including bootstrap confidence
+intervals and dataset- and target-level tables. A sample that raises is not a
+zero: it is retried once, and if it still fails the run is marked INCOMPLETE,
+no metrics are written, and the process exits with code 2.
 
 ## Evaluation
 
@@ -166,6 +275,25 @@ partial submission cannot produce full-benchmark numbers. Restrict the
 benchmark to one subset with `--split target_absent` or
 `--split test --ood-type OOD_intent`.
 
+### Target-aware scoring
+
+TargetAcc and TA-Dice are computed from a split file and the
+`predictions.jsonl` written by the harness. Each split row supplies the
+canonical target through its mask filename; each prediction supplies
+`generated_text` and `dice`:
+
+```bash
+python scripts/score_targets.py \
+  --split final/split/test.jsonl \
+  --predictions predictions.jsonl \
+  --model Model-7B \
+  --out target_metrics.tsv
+```
+
+The output has one row per setting (Overall, ID, Dataset-OOD, Objective-OOD,
+Anatomy-OOD) with the label counts, TargetAcc, TA-Dice and mean Dice. The
+script refuses to run, with exit code 2, if any split row has no prediction.
+
 ### Python API
 
 ```python
@@ -185,9 +313,26 @@ samples are therefore assessed by empty-mask accuracy rather than Dice.
 
 ## Scope
 
-This repository provides the annotation loaders, mask metrics and evaluation
-CLI. The benchmark construction pipeline, training code and model checkpoints
-are not included.
+This repository provides the reference reasoning renderer and its evidence
+operators, the official split construction, the annotation and manifest
+loaders, the mask and target-aware metrics, the evaluation CLI and shared
+harness, a reference training adapter, and unit tests.
+
+The following are not included:
+
+- the Full V1 assembly driver that downloaded and preprocessed the 30 source
+  datasets, rasterized masks and wrote the rendered images and records;
+- the frozen V15 sample manifest and V17 per-image evidence table consumed by
+  `v1_engine.py`, and the provenance data behind them;
+- per-model training code, which lives in the upstream model repositories,
+  and all model checkpoints;
+- the SonoIntent annotation package, which is being prepared for release;
+- the target-absent supplementary records beyond their split-level definition.
+
+Consequently, the benchmark cannot be rebuilt end to end from this repository
+alone. What can be reproduced directly is the split given an assembled record
+file, target-aware and mask-level scoring given predictions, and the
+evaluation protocol given a model.
 
 ## Citation
 

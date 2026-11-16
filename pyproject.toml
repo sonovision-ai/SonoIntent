@@ -11,10 +11,12 @@ requires-python = ">=3.10"
 dependencies = ["numpy", "Pillow"]
 
 [project.optional-dependencies]
+build = ["scipy"]
 test = ["pytest"]
 
 [project.scripts]
 sonointent-eval = "sonointent.eval.evaluate:main"
+sonointent-build-split = "sonointent.build.build_split:main"
 
 [tool.setuptools.packages.find]
 include = ["sonointent*"]
